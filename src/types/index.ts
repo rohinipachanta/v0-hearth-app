@@ -43,19 +43,6 @@ export type FastingType =
 
 export type FastingStrictness = 'standard' | 'phalahar' | 'dairy_only'
 
-export type IntermittentFastingSchedule =
-  | 'if_12_12'     // 12:12 — gentle beginner
-  | 'if_14_10'     // 14:10 — mild
-  | 'if_16_8'      // 16:8 — Leangains (most popular)
-  | 'if_18_6'      // 18:6 — moderate
-  | 'if_20_4'      // 20:4 — Warrior Diet
-  | 'if_omad'      // OMAD — One Meal A Day (23:1)
-  | 'if_5_2'       // 5:2 — 5 normal + 2 calorie-restricted days
-  | 'if_4_3'       // 4:3 — 4 normal + 3 calorie-restricted days
-  | 'if_adf'       // Alternate Day Fasting
-  | 'if_ete'       // Eat Stop Eat — 24-hr complete fast 1–2x/week
-  | 'if_crescendo' // Crescendo — 12–16 hr, 2–3x/week (PCOS-friendly)
-
 export type AyurvedicSeason =
   | 'vasanta' | 'greeshma' | 'varsha'
   | 'sharad' | 'hemanta' | 'shishira'
@@ -248,7 +235,6 @@ export interface WizardMemberDraft {
   health_goals: HealthGoal[]
   activity_level: ActivityLevel
   cuisines: Cuisine[]           // shared cuisine preference
-  if_schedule?: IntermittentFastingSchedule  // intermittent fasting protocol
 }
 
 export interface WizardState {
