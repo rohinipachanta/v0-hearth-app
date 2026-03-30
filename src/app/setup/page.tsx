@@ -1,18 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import StepFamily from '@/components/wizard/StepFamily';
-import StepDosha from '@/components/wizard/StepDosha';
 import StepHealth from '@/components/wizard/StepHealth';
 import StepPreferences from '@/components/wizard/StepPreferences';
 import type { WizardMemberDraft, FastingType, WizardState } from '@/types';
 
 const STEPS = [
-  { id: 1, label: 'Family', icon: '👨‍👩‍👧‍👦', description: 'Who\'s in your family?' },
-  { id: 2, label: 'Dosha', icon: '🧘', description: 'Ayurvedic body type' },
-  { id: 3, label: 'Health', icon: '💚', description: 'Conditions & goals' },
-  { id: 4, label: 'Cuisine', icon: '🍽️', description: 'Food & fasting prefs' },
+  { id: 1, label: 'Family',  icon: '👨‍👩‍👧‍👦', description: 'Who\'s in your family?' },
+  { id: 2, label: 'Health',  icon: '💚',         description: 'Body type, conditions & goals' },
+  { id: 3, label: 'Cuisine', icon: '🍽️',         description: 'Food preferences & fasting' },
 ];
 
 function blankMember(): WizardMemberDraft {
@@ -28,6 +26,7 @@ function blankMember(): WizardMemberDraft {
     health_conditions: [],
     health_goals: [],
     cuisines: [],
+    if_schedule: undefined,
   };
 }
 
@@ -45,16 +44,15 @@ export default function SetupPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Validate current step before advancing
   const validateStep = (): string | null => {
     if (state.step === 1) {
-      const invalid = state.members.find(m => !m.name.trim() || !m.dob);
-      if (invalid) return `Please fill in name and date of birth for all family members.`;
       if (state.members.length === 0) return 'Please add at least one family member.';
+      const invalid = state.members.find(m => !m.name.trim() || !m.dob);
+      if (invalid) return 'Please fill in name and date of birth for all family members.';
     }
-    if (state.step === 4) {
+    if (state.step === 3) {
       if (!state.zip.trim()) return 'Please enter your ZIP/PIN code for accurate fasting calendar.';
-      if (state.members[0]?.cuisines.length === 0) return 'Please select at least one cuisine preference.';
+      if ((state.members[0]?.cuisines?.length ?? 0) === 0) return 'Please select at least one cuisine preference.';
     }
     return null;
   };
@@ -63,7 +61,7 @@ export default function SetupPage() {
     const err = validateStep();
     if (err) { setError(err); return; }
     setError(null);
-    setState(s => ({ ...s, step: Math.min(s.step + 1, 4) }));
+    setState(s => ({ ...s, step: Math.min(s.step + 1, STEPS.length) }));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -83,7 +81,7 @@ export default function SetupPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          members: state.members,
+          members:             state.members,
           cuisine_preferences: state.members[0]?.cuisines ?? [],
           location_zip:        state.zip,
           location_country:    state.country,
@@ -99,8 +97,6 @@ export default function SetupPage() {
       setSubmitting(false);
     }
   };
-
-  const progress = ((state.step - 1) / (STEPS.length - 1)) * 100;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#FFFDF8' }}>
@@ -118,12 +114,12 @@ export default function SetupPage() {
         {/* Step indicators */}
         <div className="flex items-center justify-between mb-6">
           {STEPS.map((step, idx) => {
-            const done = state.step > step.id;
+            const done   = state.step > step.id;
             const active = state.step === step.id;
             return (
               <div key={step.id} className="flex items-center flex-1">
                 <div className="flex flex-col items-center">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all"
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all"
                     style={{
                       background: done ? '#4A7C59' : active ? '#E8793A' : '#F5E9D6',
                       color: done || active ? 'white' : '#999',
@@ -136,7 +132,7 @@ export default function SetupPage() {
                   </div>
                 </div>
                 {idx < STEPS.length - 1 && (
-                  <div className="flex-1 h-0.5 mx-2 rounded-full"
+                  <div className="flex-1 h-0.5 mx-2 rounded-full mb-4"
                     style={{ background: state.step > step.id ? '#4A7C59' : '#F5E9D6' }} />
                 )}
               </div>
@@ -144,7 +140,7 @@ export default function SetupPage() {
           })}
         </div>
 
-        {/* Error message */}
+        {/* Error */}
         {error && (
           <div className="mb-4 px-4 py-3 rounded-xl text-sm text-red-700"
             style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}>
@@ -161,18 +157,12 @@ export default function SetupPage() {
             />
           )}
           {state.step === 2 && (
-            <StepDosha
-              members={state.members}
-              onChange={members => setState(s => ({ ...s, members }))}
-            />
-          )}
-          {state.step === 3 && (
             <StepHealth
               members={state.members}
               onChange={members => setState(s => ({ ...s, members }))}
             />
           )}
-          {state.step === 4 && (
+          {state.step === 3 && (
             <StepPreferences
               members={state.members}
               onChange={members => setState(s => ({ ...s, members }))}
@@ -190,28 +180,27 @@ export default function SetupPage() {
         <div className="flex items-center justify-between">
           {state.step > 1 ? (
             <button onClick={prev}
-              className="px-5 py-2.5 rounded-pill text-sm font-medium text-gray-500 border hover:bg-gray-50 transition-colors"
+              className="px-5 py-2.5 text-sm font-medium text-gray-500 border hover:bg-gray-50 transition-colors"
               style={{ borderRadius: '50px', border: '1.5px solid #E5E7EB' }}>
               ← Back
             </button>
           ) : <div />}
 
-          {state.step < 4 ? (
+          {state.step < STEPS.length ? (
             <button onClick={next}
-              className="px-6 py-2.5 rounded-pill text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              className="px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
               style={{ background: '#E8793A', borderRadius: '50px' }}>
               Continue →
             </button>
           ) : (
             <button onClick={handleSubmit} disabled={submitting}
-              className="px-6 py-2.5 rounded-pill text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              className="px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               style={{ background: '#E8793A', borderRadius: '50px' }}>
               {submitting ? '✨ Saving…' : '🌿 Save & Get My Meal Plan'}
             </button>
           )}
         </div>
 
-        {/* Step hint */}
         <p className="text-center text-xs text-gray-400 mt-4">
           Step {state.step} of {STEPS.length} — {STEPS[state.step - 1].description}
         </p>
