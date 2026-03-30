@@ -5,7 +5,7 @@
 // Works with Google Calendar, Apple Calendar, and Outlook.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientFromCookies } from '@/lib/supabase'
+import { createServerClientFromCookies } from '@/lib/supabase-server'
 import { createEvents, EventAttributes } from 'ics'
 import type { DayPlan } from '@/types'
 

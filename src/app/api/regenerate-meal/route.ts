@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClientFromCookies } from '@/lib/supabase';
+import { createServerClientFromCookies } from '@/lib/supabase-server';
 import { getJsonModel, callGeminiWithTimeout } from '@/lib/gemini';
 import { getCurrentSeason } from '@/domain/ayurveda';
 import { getWeekStart } from '@/domain/lunar';

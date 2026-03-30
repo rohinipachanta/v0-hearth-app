@@ -5,7 +5,7 @@
 // Saves the plan to Supabase and returns it.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientFromCookies } from '@/lib/supabase'
+import { createServerClientFromCookies } from '@/lib/supabase-server'
 import { getJsonModel, callGeminiWithTimeout } from '@/lib/gemini'
 import { buildMealPlanPrompt, validateMealPlanResponse } from '@/domain/meal-plan'
 import { getFastingDaysForWeek, getWeekStart } from '@/domain/lunar'

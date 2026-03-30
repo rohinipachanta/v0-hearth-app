@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClientFromCookies } from '@/lib/supabase'
+import { createServerClientFromCookies } from '@/lib/supabase-server'
 import { resolveZipToLocation } from '@/domain/lunar'
 
 export async function POST(request: NextRequest) {
