@@ -1,10 +1,6 @@
 // ─────────────────────────────────────────────
 // API Route: POST /api/setup
 // ─────────────────────────────────────────────
-// Saves the wizard data after first-time setup:
-//   - Family members (with health goals, dosha, weight)
-//   - Fasting preferences
-//   - Resolved location (from zip code)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientFromCookies } from '@/lib/supabase'
@@ -48,7 +44,7 @@ export async function POST(request: NextRequest) {
     // ── 3. Delete existing family members (fresh setup) ──
     await supabase.from('family_members').delete().eq('user_id', user.id)
 
-    // ── 4. Map extended values to DB-allowed CHECK constraint values ──
+    // ── 4. Map extended values to DB CHECK constraint values ──
     const activityMap: Record<string, string> = {
       sedentary:   'sedentary',
       light:       'sedentary',
@@ -64,21 +60,30 @@ export async function POST(request: NextRequest) {
       jain:           'vegetarian',
     }
 
-    // ── 5. Insert all family members ──
-    const memberRows = members.map((m: any) => ({
-      user_id:            user.id,
-      name:               (m.name ?? '').trim(),
-      // WizardMemberDraft uses 'dob'; DB column is 'date_of_birth'
-      date_of_birth:      m.dob || m.date_of_birth || null,
-      gender:             m.gender ?? 'other',
-      weight_kg:          m.weight_kg ? parseFloat(String(m.weight_kg)) : null,
-      dosha:              m.dosha ?? null,
-      activity_level:     activityMap[m.activity_level] ?? 'moderate',
-      dietary_preference: dietMap[m.dietary_preference] ?? 'vegetarian',
-      health_conditions:  m.health_conditions ?? [],
-      health_goals:       m.health_goals ?? [],
-      cuisine_preferences: cuisine_preferences ?? [],
-    }))
+    // ── 5. Insert family members ──
+    // if_schedule is encoded as a tagged string in health_goals since
+    // the DB column is a flexible text[] with no CHECK constraint.
+    const memberRows = members.map((m: any) => {
+      const baseGoals: string[] = m.health_goals ?? []
+      // Append IF schedule as a tagged value so Gemini can use it
+      const goals = m.if_schedule
+        ? [...baseGoals.filter((g: string) => !g.startsWith('if_')), m.if_schedule]
+        : baseGoals.filter((g: string) => !g.startsWith('if_'))
+
+      return {
+        user_id:            user.id,
+        name:               (m.name ?? '').trim(),
+        date_of_birth:      m.dob || m.date_of_birth || null,
+        gender:             m.gender ?? 'other',
+        weight_kg:          m.weight_kg ? parseFloat(String(m.weight_kg)) : null,
+        dosha:              m.dosha ?? null,
+        activity_level:     activityMap[m.activity_level] ?? 'moderate',
+        dietary_preference: dietMap[m.dietary_preference] ?? 'vegetarian',
+        health_conditions:  m.health_conditions ?? [],
+        health_goals:       goals,
+        cuisine_preferences: cuisine_preferences ?? [],
+      }
+    })
 
     console.log('Inserting member rows:', JSON.stringify(memberRows, null, 2))
 
