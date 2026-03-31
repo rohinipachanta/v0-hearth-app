@@ -30,7 +30,7 @@ const TEXT_CONFIG: GenerationConfig = {
  */
 export function getJsonModel() {
   return genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     generationConfig: JSON_CONFIG,
   })
 }
@@ -41,18 +41,19 @@ export function getJsonModel() {
  */
 export function getTextModel() {
   return genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     generationConfig: TEXT_CONFIG,
   })
 }
 
 /**
- * Safely call Gemini with a 30-second timeout.
+ * Safely call Gemini with a timeout.
  * Returns null and throws a friendly error if it times out.
+ * Default is 55s to stay safely under Railway's 60s request limit.
  */
 export async function callGeminiWithTimeout<T>(
   promptFn: () => Promise<T>,
-  timeoutMs = 30_000
+  timeoutMs = 55_000
 ): Promise<T> {
   const timeout = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error('GEMINI_TIMEOUT')), timeoutMs)

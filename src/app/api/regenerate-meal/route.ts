@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+// Tell Next.js this route is allowed up to 60 seconds (Railway's request limit)
+export const maxDuration = 60
 import { createServerClientFromCookies } from '@/lib/supabase-server';
 import { getJsonModel, callGeminiWithTimeout } from '@/lib/gemini';
 import { getCurrentSeason } from '@/domain/ayurveda';
@@ -83,7 +86,7 @@ Return ONLY valid JSON matching this exact structure:
       const res = await model.generateContent(prompt);
       const text = res.response.text().trim().replace(/^```json\s*/i, '').replace(/```\s*$/i, '');
       return JSON.parse(text) as Meal;
-    }, 30000);
+    }, 55_000);
 
     const newMeal = result;
 

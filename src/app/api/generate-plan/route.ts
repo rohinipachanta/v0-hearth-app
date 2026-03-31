@@ -6,6 +6,9 @@
 // Merges new days into the existing DB plan for the week.
 
 import { NextRequest, NextResponse } from 'next/server'
+
+// Tell Next.js this route is allowed up to 60 seconds (Railway's request limit)
+export const maxDuration = 60
 import { createServerClientFromCookies } from '@/lib/supabase-server'
 import { getJsonModel, callGeminiWithTimeout } from '@/lib/gemini'
 import { buildMealPlanPrompt, validateMealPlanResponse } from '@/domain/meal-plan'
@@ -87,12 +90,12 @@ export async function POST(request: NextRequest) {
       dayCount,
     })
 
-    // ── Call Gemini with 30s timeout ──
+    // ── Call Gemini with 55s timeout (safely under Railway's 60s limit) ──
     const model = getJsonModel()
     const rawResponse = await callGeminiWithTimeout(async () => {
       const result = await model.generateContent(prompt)
       return result.response.text()
-    }, 30_000)
+    }, 55_000)
 
     // ── Parse and validate ──
     let parsed: unknown
