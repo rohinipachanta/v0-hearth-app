@@ -14,7 +14,7 @@ const JSON_CONFIG: GenerationConfig = {
   responseMimeType: 'application/json',
   temperature: 0.7,        // Some creativity, but not random
   topP: 0.9,
-  maxOutputTokens: 3000,   // Reduced to keep responses fast (2 days fits easily)
+  maxOutputTokens: 5000,   // 2 days of meals needs ~4000 tokens; 5000 gives a safe buffer
 }
 
 // Standard config for text responses
