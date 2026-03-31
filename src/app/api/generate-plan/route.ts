@@ -1,8 +1,9 @@
 // ─────────────────────────────────────────────
 // API Route: POST /api/generate-plan
 // ─────────────────────────────────────────────
-// Generates a 7-day meal plan using Gemini 2.0 Flash.
-// Saves the plan to Supabase and returns it.
+// Generates a batched meal plan using Gemini 2.5 Flash.
+// Accepts startDay (0-6) and dayCount (1-7) for incremental generation.
+// Merges new days into the existing DB plan for the week.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClientFromCookies } from '@/lib/supabase-server'
@@ -21,9 +22,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Body is optional — frontend may POST with no body when using defaults
-    let body: { weekStart?: string } = {}
+    let body: { weekStart?: string; startDay?: number; dayCount?: number } = {}
     try { body = await request.json() } catch { /* empty body is fine */ }
     const weekStartDate: string | undefined = body.weekStart
+    const startDay = typeof body.startDay === 'number' ? body.startDay : 0
+    const dayCount = typeof body.dayCount === 'number' ? body.dayCount : 2
 
     // ── Load user data from Supabase ──
     const [membersResult, fastingResult, userResult] = await Promise.all([
@@ -72,7 +75,7 @@ export async function POST(request: NextRequest) {
     const lat = userLocation?.location_lat ?? 20.0
     const hemisphere = lat >= 0 ? 'north' : 'south'
 
-    // ── Build prompt ──
+    // ── Build prompt for just the requested day range ──
     const prompt = buildMealPlanPrompt({
       familyMembers: members,
       fastingDays,
@@ -80,6 +83,8 @@ export async function POST(request: NextRequest) {
       hemisphere,
       cuisines: members.flatMap(m => m.cuisine_preferences)
         .filter((v, i, arr) => arr.indexOf(v) === i) as never[],
+      startDay,
+      dayCount,
     })
 
     // ── Call Gemini with 30s timeout ──
@@ -109,25 +114,46 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Save to Supabase (upsert — replace if week already exists) ──
+    // ── Merge new days into any existing plan for this week ──
     const weekStartStr = weekStart.toISOString().split('T')[0]
-    const { data: savedPlan, error: saveError } = await supabase
+    const newDays = validated.week
+
+    // Load the existing plan (if any) so we can merge rather than overwrite
+    const { data: existingRow } = await supabase
+      .from('meal_plans')
+      .select('plan_data')
+      .eq('user_id', user.id)
+      .eq('week_start_date', weekStartStr)
+      .single()
+
+    const existingDays: typeof newDays =
+      (existingRow?.plan_data as Record<string, unknown> | null)?.week as typeof newDays ??
+      (existingRow?.plan_data as Record<string, unknown> | null)?.days as typeof newDays ??
+      []
+
+    // Replace or append each new day by date
+    const dayMap = new Map(existingDays.map(d => [d.date, d]))
+    for (const day of newDays) dayMap.set(day.date, day)
+    const mergedDays = Array.from(dayMap.values()).sort((a, b) =>
+      a.date < b.date ? -1 : a.date > b.date ? 1 : 0
+    )
+
+    const { error: saveError } = await supabase
       .from('meal_plans')
       .upsert({
         user_id:         user.id,
         week_start_date: weekStartStr,
         generated_at:    new Date().toISOString(),
-        plan_data:       validated,
+        plan_data:       { week: mergedDays },
       }, { onConflict: 'user_id,week_start_date' })
-      .select()
-      .single()
 
     if (saveError) {
       console.error('Error saving meal plan:', saveError)
       return NextResponse.json({ error: 'Failed to save meal plan.' }, { status: 500 })
     }
 
-    return NextResponse.json({ plan: savedPlan, fastingDays })
+    // Return only the newly generated days (frontend merges them into state)
+    return NextResponse.json({ days: newDays, fastingDays })
 
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'

@@ -71,14 +71,20 @@ export interface PromptParams {
   weekStart:     Date
   hemisphere:    'north' | 'south'
   cuisines:      Cuisine[]
+  /** 0-indexed offset from weekStart — default 0 */
+  startDay?:     number
+  /** how many days to generate — default 7 */
+  dayCount?:     number
 }
 
 export function buildMealPlanPrompt(params: PromptParams): string {
   const { familyMembers, fastingDays, weekStart, hemisphere, cuisines } = params
+  const actualStartDay = params.startDay ?? 0
+  const actualDayCount = params.dayCount ?? 7
   const season = getCurrentSeason(weekStart, hemisphere)
-  const weekDates = Array.from({ length: 7 }, (_, i) => {
+  const weekDates = Array.from({ length: actualDayCount }, (_, i) => {
     const d = new Date(weekStart)
-    d.setDate(d.getDate() + i)
+    d.setDate(d.getDate() + actualStartDay + i)
     return format(d, 'yyyy-MM-dd (EEEE)')
   })
 
@@ -119,7 +125,7 @@ Avoid: ${season.avoid.join(', ')}`
   const cuisineSection = cuisines.map(c => c.replace('_', ' ')).join(', ')
 
   return `You are Sattvic, an expert Ayurvedic nutritionist and Indian meal planner.
-Generate a 7-day personalised meal plan for this family.
+Generate a ${actualDayCount}-day personalised meal plan for this family.
 
 ## Family Profiles
 ${memberProfiles}
@@ -137,7 +143,7 @@ ${seasonSection}
 ${cuisineSection}
 
 ## Instructions
-1. Generate breakfast, lunch, and dinner for each of the 7 days.
+1. Generate breakfast, lunch, and dinner for each of the ${actualDayCount} days listed above.
 2. For fasting days, ONLY use allowed foods listed above. Absolutely no restricted foods.
 3. For each meal, suggest 1–2 optional dosha-balancing accompaniments for each family member.
 4. Ensure each day meets or approaches each member's protein target.
@@ -255,7 +261,7 @@ export function validateMealPlanResponse(
 ): { week: DayPlan[] } | null {
   if (!parsed || typeof parsed !== 'object') return null
   const obj = parsed as Record<string, unknown>
-  if (!Array.isArray(obj.week) || obj.week.length !== 7) return null
+  if (!Array.isArray(obj.week) || obj.week.length === 0) return null
   // Validate structure and normalize each day's meals
   const normalizedWeek: DayPlan[] = []
   for (const day of obj.week as unknown[]) {

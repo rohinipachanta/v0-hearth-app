@@ -8,6 +8,24 @@ import { calcAllProteinTargets } from '@/domain/protein';
 import { formatWeekRange, getWeekStart } from '@/domain/lunar';
 import type { MealPlan, FamilyMember, FastingDay, DayPlan, Meal, ProteinTarget } from '@/types';
 
+// ─── Skeleton card (shown while a day's meals are still loading) ───────────────
+
+function DayColumnSkeleton({ date }: { date: Date }) {
+  const dayName = date.toLocaleDateString('en-IN', { weekday: 'short' });
+  const dayNum  = date.getDate();
+  return (
+    <div className="min-w-[160px] flex-1 animate-pulse">
+      <div className="text-center py-2 mb-2 rounded-xl bg-gray-100">
+        <div className="text-xs font-medium uppercase tracking-wide text-gray-400">{dayName}</div>
+        <div className="text-lg font-bold text-gray-300">{dayNum}</div>
+      </div>
+      {[0, 1, 2].map(i => (
+        <div key={i} className="w-full rounded-xl bg-gray-100 mb-2 h-16" />
+      ))}
+    </div>
+  );
+}
+
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
 function FastingBanner({ fastingDays }: { fastingDays: FastingDay[] }) {
@@ -220,9 +238,17 @@ export default function HomePage() {
   const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [userName, setUserName] = useState('');
+  // partialDays: 7-slot array used while generating. null slot = skeleton placeholder.
+  const [partialDays, setPartialDays] = useState<(DayPlan | null)[] | null>(null);
 
   const weekStart = getWeekStart(new Date());
   const weekLabel = formatWeekRange(weekStart);
+  // Pre-compute the 7 dates for skeleton headers
+  const weekDayDates = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
 
   // Load data on mount
   useEffect(() => {
@@ -283,20 +309,49 @@ export default function HomePage() {
   const generatePlan = async () => {
     setGenerating(true);
     setError(null);
-    try {
+    setPlan(null);
+
+    // Initialize 7 skeleton placeholders immediately so the UI shows them
+    const collected: (DayPlan | null)[] = Array(7).fill(null);
+    setPartialDays([...collected]);
+
+    const weekKey = weekStart.toISOString().split('T')[0];
+    let weekFastingDays: FastingDay[] = [];
+
+    const fetchBatch = async (startDay: number, dayCount: number) => {
       const res = await fetch('/api/generate-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ weekStart: weekKey, startDay, dayCount }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Generation failed');
-      // json.plan is the full Supabase row — normalize to extract days array
-      const normalized = normalizePlan(json.plan);
-      setPlan(normalized);
-      setFastingDays(json.fastingDays ?? normalized.fasting_days ?? []);
-    } catch (e: any) {
-      setError(e.message);
+      if (!res.ok) throw new Error(json.error ?? `Days ${startDay}–${startDay + dayCount - 1} failed`);
+      (json.days as DayPlan[]).forEach((day, i) => { collected[startDay + i] = day; });
+      setPartialDays([...collected]);
+      return json;
+    };
+
+    try {
+      // ── Batch 0: days 0–1 (show these first so user sees something quickly) ──
+      const json0 = await fetchBatch(0, 2);
+      weekFastingDays = json0.fastingDays ?? [];
+      setFastingDays(weekFastingDays);
+
+      // ── Batches 1–3: fire in parallel for days 2–6 ──
+      await Promise.all([
+        fetchBatch(2, 2),
+        fetchBatch(4, 2),
+        fetchBatch(6, 1),
+      ]);
+
+      // ── All done: fold into plan state ──
+      const allDays = collected.filter(Boolean) as DayPlan[];
+      setPlan({ days: allDays, fasting_days: weekFastingDays });
+      setPartialDays(null);
+
+    } catch (e: unknown) {
+      setError((e as Error).message);
+      setPartialDays(null);
     } finally {
       setGenerating(false);
     }
@@ -399,7 +454,7 @@ export default function HomePage() {
               <p className="text-gray-400 text-sm">Loading your meal plan…</p>
             </div>
           </div>
-        ) : !plan ? (
+        ) : !plan && !partialDays ? (
           /* Empty state */
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <div className="text-5xl mb-4">🍽️</div>
@@ -418,23 +473,27 @@ export default function HomePage() {
             {/* Main week grid — scrollable */}
             <div className="flex-1 overflow-x-auto">
               <div className="flex gap-3 min-w-max pb-4">
-                {plan.days?.map(day => (
-                  <DayColumn
-                    key={day.date}
-                    day={day}
-                    isFasting={fastingDayDates.has(day.date)}
-                    onClick={setSelectedMeal}
-                  />
-                ))}
+                {(partialDays ?? plan?.days?.map(d => d as DayPlan | null) ?? []).map((day, i) =>
+                  day ? (
+                    <DayColumn
+                      key={day.date}
+                      day={day}
+                      isFasting={fastingDayDates.has(day.date)}
+                      onClick={setSelectedMeal}
+                    />
+                  ) : (
+                    <DayColumnSkeleton key={i} date={weekDayDates[i]} />
+                  )
+                )}
               </div>
             </div>
 
             {/* Sidebar — protein panel */}
-            {proteinTargets.length > 0 && (
+            {proteinTargets.length > 0 && plan && (
               <div className="w-64 shrink-0">
                 <div className="rounded-2xl p-4 sticky top-24" style={{ background: '#FDF6EC', border: '1px solid #F5E9D6' }}>
                   <h3 className="font-bold text-sm text-charcoal mb-3">Today's Protein</h3>
-                  {members.map((m, i) => {
+                  {members.map((m) => {
                     const target = proteinTargets.find(t => t.member_id === m.id);
                     if (!target) return null;
                     return <ProteinBar key={m.id} member={m} target={target} achieved={getTodayProtein(m.id)} />;
