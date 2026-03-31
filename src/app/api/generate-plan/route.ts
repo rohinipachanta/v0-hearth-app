@@ -27,6 +27,7 @@ async function callGeminiRest(prompt: string): Promise<string> {
       temperature: 0.7,
       topP: 0.9,
       maxOutputTokens: 8192,
+      thinkingConfig: { thinkingBudget: 0 },
     },
   }
 
