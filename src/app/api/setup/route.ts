@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 2. Upsert user's location (upsert ensures the row exists for FK) ──
-    await supabase.from('users').upsert({
+    const { error: userUpsertError } = await supabase.from('users').upsert({
       id:                user.id,
       email:             user.email,
       location_zip:      location_zip || null,
@@ -42,6 +42,14 @@ export async function POST(request: NextRequest) {
       location_country:  locationData?.country ?? location_country ?? null,
       location_timezone: locationData?.timezone ?? null,
     }, { onConflict: 'id' })
+
+    if (userUpsertError) {
+      console.error('Failed to upsert user row (check RLS INSERT policy on users table):', userUpsertError)
+      return NextResponse.json(
+        { error: 'Could not create your profile. Please try signing out and back in.' },
+        { status: 500 }
+      )
+    }
 
     // ── 3. Delete existing family members (fresh setup) ──
     await supabase.from('family_members').delete().eq('user_id', user.id)

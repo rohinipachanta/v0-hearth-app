@@ -143,7 +143,7 @@ export default function SetupPage() {
           location_zip:        state.zip,
           location_country:    state.country,
           fasting_types:       state.fasting_types,
-          fasting_strictness:  'moderate',
+          fasting_strictness:  'standard',
         }),
       });
       const json = await res.json();
