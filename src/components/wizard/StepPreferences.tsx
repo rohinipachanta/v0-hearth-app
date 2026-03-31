@@ -63,8 +63,9 @@ export default function StepPreferences({
       try {
         const res = await fetch(`/api/resolve-location?zip=${zip}&country=${country}`);
         const json = await res.json();
-        if (json.city) {
-          setLocationName(`${json.city}, ${json.country}`);
+        const loc = json.location;
+        if (loc?.city) {
+          setLocationName(`${loc.city}, ${loc.country}`);
           setLocationStatus('ok');
         } else {
           setLocationStatus('error');

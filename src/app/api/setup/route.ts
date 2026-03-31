@@ -47,17 +47,17 @@ export async function POST(request: NextRequest) {
     // ── 4. Map extended values to DB CHECK constraint values ──
     const activityMap: Record<string, string> = {
       sedentary:   'sedentary',
-      light:       'sedentary',
+      light:       'light',
       moderate:    'moderate',
       active:      'active',
-      very_active: 'active',
+      very_active: 'very_active',
     }
     const dietMap: Record<string, string> = {
       vegetarian:     'vegetarian',
-      vegan:          'vegetarian',
+      vegan:          'vegan',
       eggetarian:     'eggetarian',
       non_vegetarian: 'non_vegetarian',
-      jain:           'vegetarian',
+      jain:           'jain',
     }
 
     // ── 5. Insert family members ──
@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
         date_of_birth:      m.dob || m.date_of_birth || null,
         gender:             m.gender ?? 'other',
         weight_kg:          m.weight_kg ? parseFloat(String(m.weight_kg)) : null,
+        height_cm:          m.height_cm ? parseFloat(String(m.height_cm)) : null,
         dosha:              m.dosha ?? null,
         activity_level:     activityMap[m.activity_level] ?? 'moderate',
         dietary_preference: dietMap[m.dietary_preference] ?? 'vegetarian',
