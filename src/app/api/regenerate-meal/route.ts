@@ -84,7 +84,13 @@ Return ONLY valid JSON matching this exact structure:
     const model = getJsonModel();
     const result = await callGeminiWithTimeout<Meal>(async () => {
       const res = await model.generateContent(prompt);
-      const text = res.response.text().trim().replace(/^```json\s*/i, '').replace(/```\s*$/i, '');
+      let text = res.response.text().trim();
+      // Strip thinking tokens and markdown fences
+      text = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+      text = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+      // Extract outermost JSON object
+      const s = text.indexOf('{'), e = text.lastIndexOf('}');
+      if (s !== -1 && e !== -1 && e > s) text = text.slice(s, e + 1);
       return JSON.parse(text) as Meal;
     }, 55_000);
 

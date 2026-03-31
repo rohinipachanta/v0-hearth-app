@@ -98,9 +98,20 @@ export async function POST(request: NextRequest) {
     }, 55_000)
 
     // ── Parse and validate ──
+    // gemini-2.5-flash may prepend thinking tokens — strip them before parsing
+    let cleaned = rawResponse.trim()
+    // Remove <thinking>...</thinking> blocks if present
+    cleaned = cleaned.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim()
+    // Extract the outermost JSON object in case there's any prefix/suffix text
+    const jsonStart = cleaned.indexOf('{')
+    const jsonEnd = cleaned.lastIndexOf('}')
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+      cleaned = cleaned.slice(jsonStart, jsonEnd + 1)
+    }
+
     let parsed: unknown
     try {
-      parsed = JSON.parse(rawResponse)
+      parsed = JSON.parse(cleaned)
     } catch {
       console.error('Gemini returned invalid JSON:', rawResponse.slice(0, 500))
       return NextResponse.json(
