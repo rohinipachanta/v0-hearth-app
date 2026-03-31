@@ -3,7 +3,24 @@ import { NextRequest, NextResponse } from 'next/server';
 // Tell Next.js this route is allowed up to 60 seconds (Railway's request limit)
 export const maxDuration = 60
 import { createServerClientFromCookies } from '@/lib/supabase-server';
-import { getJsonModel, callGeminiWithTimeout } from '@/lib/gemini';
+
+async function callGeminiRest(prompt: string): Promise<string> {
+  const apiKey = process.env.GOOGLE_GEMINI_API_KEY
+  if (!apiKey) throw new Error('GOOGLE_GEMINI_API_KEY is not set')
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens: 4096 },
+    }),
+  })
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error?.message ?? `HTTP ${res.status}`) }
+  const data = await res.json()
+  const parts: Array<{ text?: string; thought?: boolean }> = data?.candidates?.[0]?.content?.parts ?? []
+  return parts.filter(p => !p.thought && typeof p.text === 'string').map(p => p.text).join('')
+}
 import { getCurrentSeason } from '@/domain/ayurveda';
 import { getWeekStart } from '@/domain/lunar';
 import type { FamilyMember, Meal, MealPlan } from '@/types';
@@ -81,20 +98,12 @@ Return ONLY valid JSON matching this exact structure:
 }`;
 
   try {
-    const model = getJsonModel();
-    const result = await callGeminiWithTimeout<Meal>(async () => {
-      const res = await model.generateContent(prompt);
-      let text = res.response.text().trim();
-      // Strip thinking tokens and markdown fences
-      text = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
-      text = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
-      // Extract outermost JSON object
-      const s = text.indexOf('{'), e = text.lastIndexOf('}');
-      if (s !== -1 && e !== -1 && e > s) text = text.slice(s, e + 1);
-      return JSON.parse(text) as Meal;
-    }, 55_000);
+    let raw = await callGeminiRest(prompt);
+    const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+    if (s !== -1 && e > s) raw = raw.slice(s, e + 1);
+    const result = JSON.parse(raw) as Meal;
 
-    const newMeal = result;
+    const newMeal = result as Meal;
 
     // Update the meal plan in place
     const updatedDays = mealPlan.days?.map(day => {

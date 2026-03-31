@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
 // API Route: POST /api/generate-plan
 // ─────────────────────────────────────────────
-// Generates a batched meal plan using Gemini 2.5 Flash.
+// Generates a batched meal plan using Gemini 2.5 Flash (direct REST API).
 // Accepts startDay (0-6) and dayCount (1-7) for incremental generation.
 // Merges new days into the existing DB plan for the week.
 
@@ -10,10 +10,59 @@ import { NextRequest, NextResponse } from 'next/server'
 // Tell Next.js this route is allowed up to 60 seconds (Railway's request limit)
 export const maxDuration = 60
 import { createServerClientFromCookies } from '@/lib/supabase-server'
-import { getJsonModel, callGeminiWithTimeout } from '@/lib/gemini'
 import { buildMealPlanPrompt, validateMealPlanResponse } from '@/domain/meal-plan'
 import { getFastingDaysForWeek, getWeekStart } from '@/domain/lunar'
 import type { FamilyMember, FastingPreferences } from '@/types'
+
+// ── Direct REST call to Gemini — bypasses SDK entirely ──
+async function callGeminiRest(prompt: string): Promise<string> {
+  const apiKey = process.env.GOOGLE_GEMINI_API_KEY
+  if (!apiKey) throw new Error('GOOGLE_GEMINI_API_KEY is not set')
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 0.7,
+      topP: 0.9,
+      maxOutputTokens: 8192,
+    },
+  }
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 55_000)
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err?.error?.message ?? `Gemini HTTP ${res.status}`)
+    }
+
+    const data = await res.json()
+    // Extract text from all non-thought parts
+    const parts: Array<{ text?: string; thought?: boolean }> =
+      data?.candidates?.[0]?.content?.parts ?? []
+    const text = parts
+      .filter(p => !p.thought && typeof p.text === 'string')
+      .map(p => p.text)
+      .join('')
+
+    return text
+  } catch (err: unknown) {
+    clearTimeout(timer)
+    if (err instanceof Error && err.name === 'AbortError') throw new Error('GEMINI_TIMEOUT')
+    throw err
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -90,30 +139,23 @@ export async function POST(request: NextRequest) {
       dayCount,
     })
 
-    // ── Call Gemini with 55s timeout (safely under Railway's 60s limit) ──
-    const model = getJsonModel()
-    const rawResponse = await callGeminiWithTimeout(async () => {
-      const result = await model.generateContent(prompt)
-      return result.response.text()
-    }, 55_000)
+    // ── Call Gemini via direct REST (no SDK) ──
+    const rawResponse = await callGeminiRest(prompt)
 
-    // ── Parse and validate ──
-    // gemini-2.5-flash may prepend thinking tokens — strip them before parsing
+    // ── Extract JSON boundaries just in case ──
     let cleaned = rawResponse.trim()
-    // Remove <thinking>...</thinking> blocks if present
-    cleaned = cleaned.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim()
-    // Extract the outermost JSON object in case there's any prefix/suffix text
     const jsonStart = cleaned.indexOf('{')
     const jsonEnd = cleaned.lastIndexOf('}')
-    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+    if (jsonStart !== -1 && jsonEnd > jsonStart) {
       cleaned = cleaned.slice(jsonStart, jsonEnd + 1)
     }
 
+    // ── Parse and validate ──
     let parsed: unknown
     try {
       parsed = JSON.parse(cleaned)
     } catch {
-      console.error('Gemini returned invalid JSON:', rawResponse.slice(0, 500))
+      console.error('Gemini returned invalid JSON. Raw length:', rawResponse.length, 'Start:', rawResponse.slice(0, 300))
       return NextResponse.json(
         { error: 'Meal plan generation failed — invalid response. Please try again.' },
         { status: 500 }
@@ -132,7 +174,6 @@ export async function POST(request: NextRequest) {
     const weekStartStr = weekStart.toISOString().split('T')[0]
     const newDays = validated.week
 
-    // Load the existing plan (if any) so we can merge rather than overwrite
     const { data: existingRow } = await supabase
       .from('meal_plans')
       .select('plan_data')
@@ -145,7 +186,6 @@ export async function POST(request: NextRequest) {
       (existingRow?.plan_data as Record<string, unknown> | null)?.days as typeof newDays ??
       []
 
-    // Replace or append each new day by date
     const dayMap = new Map(existingDays.map(d => [d.date, d]))
     for (const day of newDays) dayMap.set(day.date, day)
     const mergedDays = Array.from(dayMap.values()).sort((a, b) =>
@@ -166,7 +206,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save meal plan.' }, { status: 500 })
     }
 
-    // Return only the newly generated days (frontend merges them into state)
     return NextResponse.json({ days: newDays, fastingDays })
 
   } catch (err) {
