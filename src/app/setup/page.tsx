@@ -7,30 +7,14 @@ import { createClient } from '@/lib/supabase';
 import StepFamily from '@/components/wizard/StepFamily';
 import StepHealth from '@/components/wizard/StepHealth';
 import StepPreferences from '@/components/wizard/StepPreferences';
-import type { WizardMemberDraft, FastingType, WizardState, FamilyMember } from '@/types';
+import { blankMember } from '@/lib/wizard-utils';
+import type { FastingType, WizardState, FamilyMember, WizardMemberDraft } from '@/types';
 
 const STEPS = [
   { id: 1, label: 'Family',  icon: '👨‍👩‍👧‍👦', description: "Who's in your family?" },
   { id: 2, label: 'Health',  icon: '💚',         description: 'Body type, conditions & goals' },
   { id: 3, label: 'Cuisine', icon: '🍽️',         description: 'Food preferences & fasting' },
 ];
-
-function blankMember(): WizardMemberDraft {
-  return {
-    id: crypto.randomUUID(),
-    name: '',
-    dob: '',
-    weight_kg: undefined,
-    height_cm: undefined,
-    dietary_preference: 'vegetarian',
-    activity_level: 'moderate',
-    dosha: undefined,
-    health_conditions: [],
-    health_goals: [],
-    cuisines: [],
-    if_schedule: undefined,
-  };
-}
 
 function memberToWizard(m: FamilyMember): WizardMemberDraft {
   const ifGoal = (m.health_goals ?? []).find((g: string) => g.startsWith('if_'));

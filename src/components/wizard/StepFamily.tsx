@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { blankMember } from '@/lib/wizard-utils';
 import type { WizardMemberDraft, ActivityLevel, DietaryPreference } from '@/types';
 
 const DIETARY_OPTIONS: { value: DietaryPreference; label: string; emoji: string }[] = [
@@ -24,21 +25,6 @@ interface Props {
   onChange: (members: WizardMemberDraft[]) => void;
 }
 
-function blankMember(): WizardMemberDraft {
-  return {
-    id: crypto.randomUUID(),
-    name: '',
-    dob: '',
-    weight_kg: undefined,
-    height_cm: undefined,
-    dietary_preference: 'vegetarian',
-    activity_level: 'moderate',
-    dosha: undefined,
-    health_conditions: [],
-    health_goals: [],
-    cuisines: [],
-  };
-}
 
 export default function StepFamily({ members, onChange }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(members[0]?.id ?? null);
