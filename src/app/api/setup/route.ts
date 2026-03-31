@@ -88,8 +88,6 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    console.log('Inserting member rows:', JSON.stringify(memberRows, null, 2))
-
     const { error: membersError } = await supabase
       .from('family_members')
       .insert(memberRows)
