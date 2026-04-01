@@ -36,8 +36,8 @@ function MealCard({ meal, onClick }: { meal: Meal; onClick: () => void }) {
   const n = meal.nutrition;
   return (
     <button onClick={onClick}
-      className="w-full text-left p-3 rounded-xl bg-white hover:shadow-md transition-shadow duration-200 border border-gray-100 h-full flex flex-col">
-      <div className="flex items-center gap-1.5 mb-1.5">
+      className="w-full text-left p-3 rounded-xl bg-white active:bg-gray-50 hover:shadow-md transition-shadow duration-200 border border-gray-100 flex flex-col sm:h-full">
+      <div className="flex items-center gap-1.5 mb-1">
         <span className="text-sm">{emojiMap[meal.meal_type ?? ''] ?? '🍽️'}</span>
         <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 capitalize">{meal.meal_type}</span>
         {meal.is_fasting_friendly && (
@@ -45,7 +45,8 @@ function MealCard({ meal, onClick }: { meal: Meal; onClick: () => void }) {
             style={{ background: '#F3EAF7', border: '1px solid #9B6BB5' }}>Fast</span>
         )}
       </div>
-      <div className="font-semibold text-sm text-gray-800 leading-snug mb-1.5">{meal.name}</div>
+      {/* On mobile show full name; on desktop clamp to 2 lines */}
+      <div className="font-semibold text-sm text-gray-800 leading-snug mb-1.5 sm:line-clamp-2">{meal.name}</div>
       {n && (
         <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-gray-400 mt-auto">
           {n.calories && <span>🔥 {n.calories} kcal</span>}
@@ -84,12 +85,13 @@ function DayRow({ day, isFasting, onClick }: {
         {isToday && <span className="ml-1 text-xs font-semibold opacity-90 bg-white bg-opacity-25 px-2 py-0.5 rounded-full">Today</span>}
         {isFasting && <span className="ml-auto text-sm">🙏 Fasting day</span>}
       </div>
-      <div className="grid grid-cols-3 gap-3 p-4" style={{ background: '#FFFDF8' }}>
+      {/* Mobile: stacked meals; Desktop: 3-column grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 p-3 sm:p-4" style={{ background: '#FFFDF8' }}>
         {(['breakfast', 'lunch', 'dinner'] as const).map(type => {
           const meal = day.meals.find(m => m.meal_type === type);
           return meal
             ? <MealCard key={type} meal={meal} onClick={() => onClick(meal)} />
-            : <div key={type} className="rounded-xl bg-gray-50 border border-gray-100 h-24 flex items-center justify-center text-xs text-gray-300">No {type}</div>;
+            : <div key={type} className="rounded-xl bg-gray-50 border border-gray-100 h-16 sm:h-24 flex items-center justify-center text-xs text-gray-300">No {type}</div>;
         })}
       </div>
     </div>
@@ -368,13 +370,13 @@ export default function HomePage() {
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-amber-100"
         style={{ background: 'rgba(255,253,248,0.95)', backdropFilter: 'blur(8px)' }}>
-        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 h-14 sm:h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">🌿</span>
-            <span className="font-bold text-xl" style={{ color: '#E8793A' }}>Sattvic</span>
+            <span className="text-xl sm:text-2xl">🌿</span>
+            <span className="font-bold text-lg sm:text-xl" style={{ color: '#E8793A' }}>Sattvic</span>
           </div>
-          <div className="flex items-center gap-3">
-            {userName && <span className="text-sm text-gray-500">Namaste, {userName} 🙏</span>}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {userName && <span className="hidden sm:inline text-sm text-gray-500">Namaste, {userName} 🙏</span>}
             <a href="/profile" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">Profile</a>
             <button onClick={handleSignOut} className="text-sm text-gray-400 hover:text-gray-600">Sign out</button>
           </div>
@@ -383,21 +385,21 @@ export default function HomePage() {
 
       <main className="max-w-4xl mx-auto px-4 py-6">
         {/* Week header */}
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: '#2C2416' }}>This Week's Meals</h1>
+            <h1 className="text-xl sm:text-2xl font-bold" style={{ color: '#2C2416' }}>This Week's Meals</h1>
             <p className="text-sm text-gray-500 mt-0.5">{weekLabel}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             {plan && (
               <button onClick={exportCalendar}
-                className="px-4 py-2 text-sm font-medium border transition-colors hover:bg-gray-50"
+                className="px-3 sm:px-4 py-2 text-sm font-medium border transition-colors hover:bg-gray-50"
                 style={{ border: '1.5px solid #E8793A', color: '#E8793A', borderRadius: '50px' }}>
-                📅 Export
+                📅 <span className="hidden sm:inline">Export</span>
               </button>
             )}
             <button onClick={generatePlan} disabled={generating}
-              className="px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              className="px-4 sm:px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               style={{ background: '#E8793A', borderRadius: '50px' }}>
               {generating ? '✨ Generating...' : plan ? '🔄 Regenerate' : '✨ Generate Plan'}
             </button>
@@ -440,6 +442,29 @@ export default function HomePage() {
             </button>
           </div>
         ) : (
+          {/* Mobile protein strip — shown only on small screens */}
+          {proteinTargets.length > 0 && plan && (
+            <div className="sm:hidden flex gap-3 mb-4 overflow-x-auto pb-1">
+              {members.map(m => {
+                const target = proteinTargets.find(t => t.member_id === m.id);
+                if (!target) return null;
+                const achieved = getTodayProtein(m.id);
+                const pct = Math.min(100, Math.round((achieved / target.target_g) * 100));
+                const color = pct >= 80 ? '#4A7C59' : pct >= 50 ? '#F5A623' : '#C2546E';
+                return (
+                  <div key={m.id} className="rounded-xl p-3 shrink-0 min-w-[140px]"
+                    style={{ background: '#FDF6EC', border: '1px solid #F5E9D6' }}>
+                    <div className="text-xs font-semibold mb-1" style={{ color: '#2C2416' }}>{m.name} — Today's protein</div>
+                    <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden mb-1">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+                    </div>
+                    <div className="text-xs text-gray-500">{achieved}g / {target.target_g}g ({pct}%)</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div className="flex gap-6 items-start">
             {/* Day rows — vertical stack */}
             <div className="flex-1">
@@ -457,9 +482,9 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Sidebar — protein panel */}
+            {/* Sidebar — protein panel (desktop only) */}
             {proteinTargets.length > 0 && plan && (
-              <div className="w-56 shrink-0">
+              <div className="hidden sm:block w-56 shrink-0">
                 <div className="rounded-2xl p-4 sticky top-24"
                   style={{ background: '#FDF6EC', border: '1px solid #F5E9D6' }}>
                   <h3 className="font-bold text-sm mb-3" style={{ color: '#2C2416' }}>Today's Protein</h3>
