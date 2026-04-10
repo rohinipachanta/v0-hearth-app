@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, type RefObject } from 'react';
 import { createClient } from '@/lib/supabase';
 import { calcAllProteinTargets } from '@/domain/protein';
 import { formatWeekRange, getWeekStart } from '@/domain/lunar';
@@ -52,7 +52,7 @@ function buildShareText(grouped: Record<string, string[]>): string {
   return lines.join('\n').trim();
 }
 
-function GroceryList({ days, listRef }: { days: DayPlan[]; listRef?: React.RefObject<HTMLDivElement> }) {
+function GroceryList({ days, listRef }: { days: DayPlan[]; listRef?: RefObject<HTMLDivElement> }) {
   const grouped = buildGroceryList(days);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -427,14 +427,16 @@ export default function HomePage() {
       setFastingDays(weekFastingDays);
 
       // Accumulate avoidMeals sequentially so each batch knows ALL prior dishes
-      const avoid0: string[] = (json0.days as DayPlan[])
-        .flatMap(d => d.meals.map(m => m.name)).filter(Boolean);
+      const extractNames = (days: DayPlan[]): string[] =>
+        (days ?? []).flatMap(d => (d.meals ?? []).map(m => m.name)).filter(Boolean);
+
+      const avoid0 = extractNames(json0.days as DayPlan[]);
 
       const json2 = await fetchBatch(2, 2, avoid0);
-      const avoid2 = [...avoid0, ...(json2.days as DayPlan[]).flatMap(d => d.meals.map(m => m.name)).filter(Boolean)];
+      const avoid2 = [...avoid0, ...extractNames(json2.days as DayPlan[])];
 
       const json4 = await fetchBatch(4, 2, avoid2);
-      const avoid4 = [...avoid2, ...(json4.days as DayPlan[]).flatMap(d => d.meals.map(m => m.name)).filter(Boolean)];
+      const avoid4 = [...avoid2, ...extractNames(json4.days as DayPlan[])];
 
       await fetchBatch(6, 1, avoid4);
 
@@ -519,7 +521,19 @@ export default function HomePage() {
         {/* ── Week toggle tabs ── */}
         <div className="flex gap-1 p-1 rounded-2xl mb-6" style={{ background: '#F5E9D6' }}>
           {(['this', 'next'] as const).map(w => (
-            <button key={w} onClick={() => setActiveWeek(w)} disabled={generating}
+            <button key={w}
+              onClick={() => {
+                if (w === activeWeek) return;
+                // Clear state immediately so we never flash the wrong week's data
+                setPlan(null);
+                setFastingDays([]);
+                setPartialDays(null);
+                setShowGrocery(false);
+                setError(null);
+                setLoading(true);
+                setActiveWeek(w);
+              }}
+              disabled={generating}
               className="flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all disabled:opacity-50"
               style={activeWeek === w
                 ? { background: '#E8793A', color: 'white', boxShadow: '0 1px 4px rgba(232,121,58,0.3)' }
